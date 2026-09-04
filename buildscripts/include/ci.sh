@@ -67,6 +67,7 @@ elif [ "$1" = "install" ]; then
 	$WGET https://github.com/mpv-player/mpv/archive/master.tar.gz -O master.tgz
 	tar -xzf master.tgz -C deps/mpv --strip-components=1
 	rm master.tgz
+	patch -d deps/mpv -p1 < ./patches/mpv-aimagereader-maximages.patch
 
 	msg "Trying to fetch existing prefix"
 	mkdir -p prefix
