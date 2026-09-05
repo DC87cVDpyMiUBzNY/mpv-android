@@ -1,0 +1,105 @@
+From dee455fd706a554e214701e36523e6559355df1f Mon Sep 17 00:00:00 2001
+From: James Almer <jamrial@gmail.com>
+Date: Thu, 21 Nov 2024 12:11:24 -0300
+Subject: [PATCH] avcodec/mediacodecdec_common: export correct dimensions and
+ cropping values
+
+Signed-off-by: James Almer <jamrial@gmail.com>
+---
+ libavcodec/mediacodecdec_common.c | 45 ++++++++++++++++++++-----------
+ 1 file changed, 30 insertions(+), 15 deletions(-)
+
+diff --git a/libavcodec/mediacodecdec_common.c b/libavcodec/mediacodecdec_common.c
+index 84c34ac270..9efc637ea1 100644
+--- a/libavcodec/mediacodecdec_common.c
++++ b/libavcodec/mediacodecdec_common.c
+@@ -304,8 +304,10 @@ static int mediacodec_wrap_hw_buffer(AVCodecContext *avctx,
+     AVMediaCodecBuffer *buffer = NULL;
+ 
+     frame->buf[0] = NULL;
+-    frame->width = avctx->width;
+-    frame->height = avctx->height;
++    frame->width = avctx->coded_width;
++    frame->height = avctx->coded_height;
++    frame->crop_right = s->crop_right;
++    frame->crop_bottom = s->crop_bottom;
+     frame->format = avctx->pix_fmt;
+     frame->sample_aspect_ratio = avctx->sample_aspect_ratio;
+ 
+@@ -445,8 +447,10 @@ static int mediacodec_wrap_sw_video_buffer(AVCodecContext *avctx,
+     int ret = 0;
+     int status = 0;
+ 
+-    frame->width = avctx->width;
+-    frame->height = avctx->height;
++    frame->width = avctx->coded_width;
++    frame->height = avctx->coded_height;
++    frame->crop_right = s->crop_right;
++    frame->crop_bottom = s->crop_bottom;
+     frame->format = avctx->pix_fmt;
+ 
+     /* MediaCodec buffers needs to be copied to our own refcounted buffers
+@@ -547,6 +551,7 @@ static int mediacodec_dec_parse_video_format(AVCodecContext *avctx, MediaCodecDe
+     int color_range = 0;
+     int color_standard = 0;
+     int color_transfer = 0;
++    int crop_top = 0, crop_bottom = 0, crop_left = 0, crop_right = 0;
+     char *format = NULL;
+ 
+     if (!s->format) {
+@@ -587,19 +592,19 @@ static int mediacodec_dec_parse_video_format(AVCodecContext *avctx, MediaCodecDe
+     }
+ 
+     /* Optional fields */
+-    AMEDIAFORMAT_GET_INT32(s->crop_top,    "crop-top",    0);
+-    AMEDIAFORMAT_GET_INT32(s->crop_bottom, "crop-bottom", 0);
+-    AMEDIAFORMAT_GET_INT32(s->crop_left,   "crop-left",   0);
+-    AMEDIAFORMAT_GET_INT32(s->crop_right,  "crop-right",  0);
++    AMEDIAFORMAT_GET_INT32(crop_top,    "crop-top",    0);
++    AMEDIAFORMAT_GET_INT32(crop_bottom, "crop-bottom", 0);
++    AMEDIAFORMAT_GET_INT32(crop_left,   "crop-left",   0);
++    AMEDIAFORMAT_GET_INT32(crop_right,  "crop-right",  0);
+ 
+     // Try "crop" for NDK
+     // MediaTek SOC return some default value like Rect(0, 0, 318, 238)
+-    if (!(s->crop_right && s->crop_bottom) && s->use_ndk_codec && !strstr(s->codec_name, ".mtk."))
+-        ff_AMediaFormat_getRect(s->format, "crop", &s->crop_left, &s->crop_top, &s->crop_right, &s->crop_bottom);
++    if (!(crop_right && crop_bottom) && s->use_ndk_codec && !strstr(s->codec_name, ".mtk."))
++        ff_AMediaFormat_getRect(s->format, "crop", &crop_left, &crop_top, &crop_right, &crop_bottom);
+ 
+-    if (s->crop_right && s->crop_bottom) {
+-        width = s->crop_right + 1 - s->crop_left;
+-        height = s->crop_bottom + 1 - s->crop_top;
++    if (crop_right && crop_bottom) {
++        width = crop_right + 1 - crop_left;
++        height = crop_bottom + 1 - crop_top;
+     } else {
+         /* TODO: NDK MediaFormat should try getRect() first.
+          * Try crop-width/crop-height, it works on NVIDIA Shield.
+@@ -639,11 +644,21 @@ static int mediacodec_dec_parse_video_format(AVCodecContext *avctx, MediaCodecDe
+     av_log(avctx, AV_LOG_INFO,
+         "Output crop parameters top=%d bottom=%d left=%d right=%d, "
+         "resulting dimensions width=%d height=%d\n",
+-        s->crop_top, s->crop_bottom, s->crop_left, s->crop_right,
++        crop_top, crop_bottom, crop_left, crop_right,
+         width, height);
+ 
++    s->crop_bottom = s->height - height;
++    s->crop_right = s->width - width;
++
+     av_freep(&format);
+-    return ff_set_dimensions(avctx, width, height);
++    ret = ff_set_dimensions(avctx, s->width, s->height);
++    if (ret < 0)
++        return ret;
++
++    avctx->width = width;
++    avctx->height = height;
++
++    return 0;
+ fail:
+     av_freep(&format);
+     return ret;
+-- 
+2.47.0
+

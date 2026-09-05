@@ -23,6 +23,7 @@ if [ ! -d ffmpeg ]; then
 	[ $IN_CI -eq 1 ] && args+=(--depth=1 -b "$v_ci_ffmpeg")
 	git clone https://github.com/FFmpeg/FFmpeg ffmpeg "${args[@]}"
 	patch -d ffmpeg -p1 < ../patches/ffmpeg-hw-profile-check.patch
+	patch -d ffmpeg -p1 < ../patches/0001-avcodec-mediacodecdec_common-export-correct-dimensio.patch
 fi
 
 # freetype2
