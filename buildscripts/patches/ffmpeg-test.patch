@@ -1,8 +1,16 @@
 diff --git a/libavcodec/mediacodecdec.c b/libavcodec/mediacodecdec.c
-index 89f8ed5..cb048c5 100644
+index 89f8ed5..b7991cf 100644
 --- a/libavcodec/mediacodecdec.c
 +++ b/libavcodec/mediacodecdec.c
-@@ -493,6 +493,7 @@ static int mediacodec_receive_frame(AVCodecContext *avctx, AVFrame *frame)
+@@ -32,6 +32,7 @@
+ #include "libavutil/intreadwrite.h"
+ #include "libavutil/pixfmt.h"
+ #include "libavutil/internal.h"
++#include "libavutil/time.h"
+ 
+ #include "avcodec.h"
+ #include "codec_internal.h"
+@@ -493,6 +494,7 @@ static int mediacodec_receive_frame(AVCodecContext *avctx, AVFrame *frame)
      MediaCodecContext *s = avctx->priv_data;
      int ret;
      ssize_t index;
@@ -10,7 +18,7 @@ index 89f8ed5..cb048c5 100644
  
      /* In delay_flush mode, wait until the user has released or rendered
         all retained frames. */
-@@ -509,6 +510,9 @@ static int mediacodec_receive_frame(AVCodecContext *avctx, AVFrame *frame)
+@@ -509,6 +511,9 @@ static int mediacodec_receive_frame(AVCodecContext *avctx, AVFrame *frame)
  
      /* feed decoder */
      while (1) {
@@ -20,7 +28,7 @@ index 89f8ed5..cb048c5 100644
          if (s->ctx->current_input_buffer < 0 && !s->ctx->draining) {
              /* poll for input space */
              index = ff_AMediaCodec_dequeueInputBuffer(s->ctx->codec, 0);
-@@ -521,17 +525,27 @@ static int mediacodec_receive_frame(AVCodecContext *avctx, AVFrame *frame)
+@@ -521,17 +526,27 @@ static int mediacodec_receive_frame(AVCodecContext *avctx, AVFrame *frame)
                   * return EAGAIN, which violate the design.
                   */
                  if (ff_AMediaCodec_infoTryAgainLater(s->ctx->codec, index) &&
