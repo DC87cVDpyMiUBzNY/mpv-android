@@ -30,7 +30,7 @@ index 89f8ed5..cb048c5 100644
 +                        av_log(avctx, AV_LOG_DEBUG,
 +                               "No decoder progress in %dms (input and output "
 +                               "ports both busy), returning EAGAIN\n",
-+                               (int)(NO_PROGRESS_TIMEOUT_US / 1000));
++                               (int)(100000 / 1000));
 +                        return AVERROR(EAGAIN);
 +                    }
                      continue;
