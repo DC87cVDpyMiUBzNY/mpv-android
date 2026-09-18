@@ -5,6 +5,8 @@ import android.util.AttributeSet
 import android.util.Log
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.content.res.Configuration
+import android.os.Build
 
 // Contains only the essential code needed to get a picture on the screen
 
@@ -77,11 +79,12 @@ abstract class BaseMPVView(context: Context, attrs: AttributeSet) : SurfaceView(
     // Surface callbacks
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        if (display != null) {
+        val isTv = (resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
+        if (isTv && display != null) {
             val physicalWidth = display.mode.physicalWidth
             val physicalHeight = display.mode.physicalHeight
             if (width != physicalWidth || height != physicalHeight) {
-                Log.w(TAG, "Surface size ${width}x$height differs from display mode size ${physicalWidth}x$physicalHeight")
+                Log.w(TAG, "Surface size: ${width}x$height, Display mode size: ${physicalWidth}x$physicalHeight")
             }
             MPVLib.setPropertyString("android-surface-size", "${physicalWidth}x$physicalHeight")
         } else {
