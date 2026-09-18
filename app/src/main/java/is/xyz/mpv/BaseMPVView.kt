@@ -77,7 +77,16 @@ abstract class BaseMPVView(context: Context, attrs: AttributeSet) : SurfaceView(
     // Surface callbacks
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-        MPVLib.setPropertyString("android-surface-size", "${width}x$height")
+        if (display != null) {
+            val physicalWidth = display.mode.physicalWidth
+            val physicalHeight = display.mode.physicalHeight
+            if (width != physicalWidth || height != physicalHeight) {
+                Log.w(TAG, "Surface size ${width}x$height differs from display mode size ${physicalWidth}x$physicalHeight")
+            }
+            MPVLib.setPropertyString("android-surface-size", "${physicalWidth}x$physicalHeight")
+        } else {
+            MPVLib.setPropertyString("android-surface-size", "${width}x$height")
+        }
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
