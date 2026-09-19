@@ -1,5 +1,5 @@
 diff --git a/libavcodec/mediacodecdec.c b/libavcodec/mediacodecdec.c
-index bc176d8..a2a9dc4 100644
+index bc176d8..95ae3f5 100644
 --- a/libavcodec/mediacodecdec.c
 +++ b/libavcodec/mediacodecdec.c
 @@ -32,6 +32,7 @@
@@ -44,7 +44,7 @@ index bc176d8..a2a9dc4 100644
 -                    ret == AVERROR(EAGAIN))
 +                    ret == AVERROR(EAGAIN)) {
 +                    int64_t stalled_for = av_gettime_relative() - s->stall_since;
-+                    if (stalled_for > NO_PROGRESS_FLUSH_US && !s->ctx->flushing) {
++                    if (stalled_for > 1000000 && !s->ctx->flushing) {
 +                        av_log(avctx, AV_LOG_WARNING,
 +                               "Decoder made no progress for %"PRId64"ms, "
 +                               "flushing codec to recover\n",
@@ -54,10 +54,10 @@ index bc176d8..a2a9dc4 100644
 +                        s->stall_since = 0;
 +                        continue;
 +                    }
-+                    if (stalled_for > NO_PROGRESS_TIMEOUT_US) {
++                    if (stalled_for > 100000) {
 +                        av_log(avctx, AV_LOG_DEBUG,
 +                               "No decoder progress in %dms, returning EAGAIN\n",
-+                               (int)(NO_PROGRESS_TIMEOUT_US / 1000));
++                               (int)(100000 / 1000));
 +                        return AVERROR(EAGAIN);
 +                    }
                      continue;
