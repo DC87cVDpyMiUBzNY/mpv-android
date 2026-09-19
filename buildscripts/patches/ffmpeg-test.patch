@@ -1,5 +1,5 @@
 diff --git a/libavcodec/mediacodecdec.c b/libavcodec/mediacodecdec.c
-index 89f8ed5..b7991cf 100644
+index 89f8ed5..443230b 100644
 --- a/libavcodec/mediacodecdec.c
 +++ b/libavcodec/mediacodecdec.c
 @@ -32,6 +32,7 @@
@@ -10,50 +10,77 @@ index 89f8ed5..b7991cf 100644
  
  #include "avcodec.h"
  #include "codec_internal.h"
-@@ -493,6 +494,7 @@ static int mediacodec_receive_frame(AVCodecContext *avctx, AVFrame *frame)
-     MediaCodecContext *s = avctx->priv_data;
-     int ret;
-     ssize_t index;
-+    int64_t no_progress_deadline = 0;
+@@ -60,6 +61,8 @@ typedef struct MediaCodecContext {
+     int use_ndk_codec;
+     // Ref. MediaFormat KEY_OPERATING_RATE
+     int operating_rate;
++
++    int64_t stall_since;
+ } MediaCodecContext;
  
-     /* In delay_flush mode, wait until the user has released or rendered
-        all retained frames. */
-@@ -509,6 +511,9 @@ static int mediacodec_receive_frame(AVCodecContext *avctx, AVFrame *frame)
+ static av_cold int mediacodec_decode_close(AVCodecContext *avctx)
+@@ -504,11 +507,15 @@ static int mediacodec_receive_frame(AVCodecContext *avctx, AVFrame *frame)
+ 
+     /* poll for new frame */
+     ret = ff_mediacodec_dec_receive(avctx, s->ctx, frame, false);
+-    if (ret != AVERROR(EAGAIN))
++    if (ret != AVERROR(EAGAIN)) {
++        s->stall_since = 0;
+         return ret;
++    }
  
      /* feed decoder */
      while (1) {
-+        if (!no_progress_deadline)
-+            no_progress_deadline = av_gettime_relative() + 100000;
-+
++        if (!s->stall_since)
++            s->stall_since = av_gettime_relative();
          if (s->ctx->current_input_buffer < 0 && !s->ctx->draining) {
              /* poll for input space */
              index = ff_AMediaCodec_dequeueInputBuffer(s->ctx->codec, 0);
-@@ -521,17 +526,27 @@ static int mediacodec_receive_frame(AVCodecContext *avctx, AVFrame *frame)
+@@ -521,17 +528,37 @@ static int mediacodec_receive_frame(AVCodecContext *avctx, AVFrame *frame)
                   * return EAGAIN, which violate the design.
                   */
                  if (ff_AMediaCodec_infoTryAgainLater(s->ctx->codec, index) &&
 -                    ret == AVERROR(EAGAIN))
 +                    ret == AVERROR(EAGAIN)) {
-+                    if (av_gettime_relative() > no_progress_deadline) {
++                    int64_t stalled_for = av_gettime_relative() - s->stall_since;
++                    if (stalled_for > 1000000 && !s->ctx->flushing) {
++                        av_log(avctx, AV_LOG_WARNING,
++                               "Decoder made no progress for %dms, flushing codec to recover\n",
++                               (int)(stalled_for / 1000));
++                        if (ff_mediacodec_dec_flush(avctx, s->ctx) < 0)
++                            return AVERROR_EXTERNAL;
++                        s->stall_since = 0;
++                        continue;
++                    }
++                    if (stalled_for > 100000) {
 +                        av_log(avctx, AV_LOG_DEBUG,
-+                               "No decoder progress in %dms (input and output "
-+                               "ports both busy), returning EAGAIN\n",
++                               "No decoder progress in %dms, returning EAGAIN\n",
 +                               (int)(100000 / 1000));
 +                        return AVERROR(EAGAIN);
 +                    }
                      continue;
 +                }
++                s->stall_since = 0;
                  return ret;
              }
              s->ctx->current_input_buffer = index;
-+            no_progress_deadline = 0;
++            s->stall_since = 0;
          }
  
          /* try to flush any buffered packet data */
          if (s->buffered_pkt.size > 0) {
              ret = ff_mediacodec_dec_send(avctx, s->ctx, &s->buffered_pkt, false);
              if (ret >= 0) {
-+                no_progress_deadline = 0;
++                s->stall_since = 0;
                  s->buffered_pkt.size -= ret;
                  s->buffered_pkt.data += ret;
                  if (s->buffered_pkt.size <= 0) {
+@@ -575,6 +602,8 @@ static void mediacodec_decode_flush(AVCodecContext *avctx)
+ {
+     MediaCodecContext *s = avctx->priv_data;
+ 
++    s->stall_since = 0;
++
+     av_packet_unref(&s->buffered_pkt);
+ 
+     ff_mediacodec_dec_flush(avctx, s->ctx);
