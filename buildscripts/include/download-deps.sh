@@ -24,7 +24,7 @@ if [ ! -d ffmpeg ]; then
 	git clone https://github.com/FFmpeg/FFmpeg ffmpeg "${args[@]}"
 	patch -d ffmpeg -p1 < ../patches/ffmpeg-hw-profile-check.patch
 	patch -d ffmpeg -p1 < ../patches/avcodec-mediacodecdec_common-export-correct-dimensio.patch
-	patch -d ffmpeg -p1 < ../patches/ffmpeg-test.patch
+	patch -d ffmpeg -p1 < ../patches/ffmpeg-test1.patch
 fi
 
 # freetype2
