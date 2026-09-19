@@ -44,7 +44,7 @@ index bc176d8..95ae3f5 100644
 -                    ret == AVERROR(EAGAIN))
 +                    ret == AVERROR(EAGAIN)) {
 +                    int64_t stalled_for = av_gettime_relative() - s->stall_since;
-+                    if (stalled_for > 1000000 && !s->ctx->flushing) {
++                    if (stalled_for > 5000000 && !s->ctx->flushing) {
 +                        av_log(avctx, AV_LOG_WARNING,
 +                               "Decoder made no progress for %"PRId64"ms, "
 +                               "flushing codec to recover\n",
