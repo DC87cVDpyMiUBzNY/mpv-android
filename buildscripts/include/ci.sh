@@ -64,7 +64,7 @@ elif [ "$1" = "install" ]; then
 
 	msg "Fetching mpv"
 	mkdir -p deps/mpv
-	$WGET https://github.com/DC87cVDpyMiUBzNY/mpv/archive/master.tar.gz -O master.tgz
+	$WGET https://github.com/DC87cVDpyMiUBzNY/mpv/archive/test.tar.gz -O master.tgz
 	tar -xzf master.tgz -C deps/mpv --strip-components=1
 	rm master.tgz
 
