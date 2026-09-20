@@ -1,0 +1,69 @@
+diff --git a/libavcodec/mediacodecdec.c b/libavcodec/mediacodecdec.c
+index bc176d8070..da7051549e 100644
+--- a/libavcodec/mediacodecdec.c
++++ b/libavcodec/mediacodecdec.c
+@@ -28,6 +28,7 @@
+ #include "libavutil/avassert.h"
+ #include "libavutil/common.h"
+ #include "libavutil/mem.h"
++#include "libavutil/time.h"
+ #include "libavutil/opt.h"
+ #include "libavutil/intreadwrite.h"
+ #include "libavutil/pixfmt.h"
+@@ -45,6 +46,8 @@
+ #include "mediacodec_wrapper.h"
+ #include "mediacodecdec_common.h"
+ 
++#define MEDIACODEC_MAX_STALL_US 100000
++
+ typedef struct MediaCodecH264DecContext {
+ 
+     AVClass *avclass;
+@@ -491,6 +494,7 @@ static int mediacodec_receive_frame(AVCodecContext *avctx, AVFrame *frame)
+     MediaCodecH264DecContext *s = avctx->priv_data;
+     int ret;
+     ssize_t index;
++    int64_t stall_until;
+ 
+     /* In delay_flush mode, wait until the user has released or rendered
+        all retained frames. */
+@@ -506,6 +510,7 @@ static int mediacodec_receive_frame(AVCodecContext *avctx, AVFrame *frame)
+         return ret;
+ 
+     /* feed decoder */
++    stall_until = av_gettime_relative() + MEDIACODEC_MAX_STALL_US;
+     while (1) {
+         if (s->ctx->current_input_buffer < 0 && !s->ctx->draining) {
+             /* poll for input space */
+@@ -520,7 +525,31 @@ static int mediacodec_receive_frame(AVCodecContext *avctx, AVFrame *frame)
+                  */
+                 if (ff_AMediaCodec_infoTryAgainLater(s->ctx->codec, index) &&
+                     ret == AVERROR(EAGAIN))
++                {
++                    if (av_gettime_relative() > stall_until) {
++                        /* Decoder stalled: progress is impossible until the
++                         * client returns retained output buffers. Return
++                         * control instead of spinning forever (spinning
++                         * wedges e.g. libmpv's core thread and prevents it
++                         * from processing commands => ANR). */
++                        av_log(avctx, AV_LOG_DEBUG,
++                               "Decoder stalled (input full, no output after "
++                               "%"PRId64"us), returning EAGAIN\n",
++                               (int64_t)MEDIACODEC_MAX_STALL_US);
++
++                        /* Keep the avcodec API contract: drain a pending
++                         * packet so a following avcodec_send_packet() will
++                         * not fail with EAGAIN. */
++                        if (s->buffered_pkt.size == 0) {
++                            ret = ff_decode_get_packet(avctx, &s->buffered_pkt);
++                            if (ret < 0 && ret != AVERROR(EAGAIN) &&
++                                ret != AVERROR_EOF)
++                                return ret;
++                        }
++                        return AVERROR(EAGAIN);
++                    }
+                     continue;
++                }
+                 return ret;
+             }
+             s->ctx->current_input_buffer = index;
